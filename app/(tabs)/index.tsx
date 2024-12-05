@@ -1,74 +1,157 @@
-import { Image, StyleSheet, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, FlatList, Button, StyleSheet, Alert } from 'react-native';
+import AudioRecorderPlayer from 'react-native-audio-recorder-player';
+import { PermissionsAndroid, Platform } from 'react-native';
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+const audioRecorderPlayer = new AudioRecorderPlayer();
+
+type VoiceNote = {
+  id: string;
+  filePath: string;
+  date: Date;
+};
 
 export default function HomeScreen() {
+  const [voiceNotes, setVoiceNotes] = useState<VoiceNote[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  useEffect(() => {
+    const requestPermissions = async () => {
+      if (Platform.OS === 'android') {
+        await PermissionsAndroid.requestMultiple([
+          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+          PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+        ]);
+      }
+    };
+    requestPermissions();
+  }, []);
+
+  const startRecording = async () => {
+    try {
+      const result = await audioRecorderPlayer.startRecorder();
+      setIsRecording(true);
+      console.log('Recording started: ', result);
+    } catch (error) {
+      Alert.alert('Error', 'Could not start recording.');
+    }
+  };
+
+  const stopRecording = async () => {
+    try {
+      const result = await audioRecorderPlayer.stopRecorder();
+      setIsRecording(false);
+      console.log('Recording stopped: ', result);
+
+      setVoiceNotes((prevNotes) => [
+        ...prevNotes,
+        { id: Date.now().toString(), filePath: result, date: new Date() },
+      ]);
+    } catch (error) {
+      Alert.alert('Error', 'Could not stop recording.');
+    }
+  };
+
+  const playVoiceNote = async (filePath: string) => {
+    try {
+      const result = await audioRecorderPlayer.startPlayer(filePath);
+      setIsPlaying(true);
+      console.log('Playing: ', result);
+  
+      audioRecorderPlayer.addPlayBackListener((e) => {
+        if (e.currentPosition === e.duration) {
+          stopPlayback();
+        }
+      });
+    } catch (error) {
+      Alert.alert('Error', 'Could not play the audio.');
+    }
+  };
+  
+
+  const stopPlayback = async () => {
+    try {
+      await audioRecorderPlayer.stopPlayer();
+      setIsPlaying(false);
+      console.log('Playback stopped.');
+    } catch (error) {
+      Alert.alert('Error', 'Could not stop playback.');
+    }
+  };
+
+  const deleteVoiceNote = (id: string) => {
+    setVoiceNotes((prevNotes) => prevNotes.filter((note) => note.id !== id));
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
+    <View style={styles.container}>
+      <Text style={styles.header}>Voice Notes</Text>
+
+      <FlatList
+        data={voiceNotes}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <View style={styles.noteContainer}>
+            <Text style={styles.noteText}>
+              {item.date.toLocaleDateString()} - {item.date.toLocaleTimeString()}
+            </Text>
+            <View style={styles.noteActions}>
+              <Button
+                title={isPlaying ? 'Stop' : 'Play'}
+                onPress={() =>
+                  isPlaying ? stopPlayback() : playVoiceNote(item.filePath)
+                }
+              />
+              <Button title="Delete" color="red" onPress={() => deleteVoiceNote(item.id)} />
+            </View>
+          </View>
+        )}
+      />
+
+      <View style={styles.controls}>
+        <Button
+          title={isRecording ? 'Stop Recording' : 'Start Recording'}
+          onPress={isRecording ? stopRecording : startRecording}
         />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12'
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  container: {
+    flex: 1,
+    padding: 20,
+    backgroundColor: '#f5f5f5',
+  },
+  header: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  noteContainer: {
+    padding: 15,
+    marginVertical: 10,
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  noteText: {
+    fontSize: 16,
+    marginBottom: 10,
+  },
+  noteActions: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  controls: {
+    marginTop: 20,
   },
 });
