@@ -1,121 +1,150 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, Button, StyleSheet, Alert } from 'react-native';
-import AudioRecorderPlayer from 'react-native-audio-recorder-player';
-import { PermissionsAndroid, Platform } from 'react-native';
+import { View, Text, Button, TextInput, FlatList, StyleSheet, Alert } from 'react-native';
+import { Audio } from 'expo-av';
 
-const audioRecorderPlayer = new AudioRecorderPlayer();
-
-type VoiceNote = {
+interface VoiceNote {
   id: string;
+  title: string;
   filePath: string;
-  date: Date;
-};
+  date: string;
+}
 
-export default function HomeScreen() {
-  const [voiceNotes, setVoiceNotes] = useState<VoiceNote[]>([]);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
+export default function App() {
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [recordingUri, setRecordingUri] = useState<string>('');
+  const [recordingTitle, setRecordingTitle] = useState<string>('');
+  const [recordings, setRecordings] = useState<VoiceNote[]>([]);
+  const [isRecording, setIsRecording] = useState<boolean>(false);
 
+  // Request permissions on load
   useEffect(() => {
-    const requestPermissions = async () => {
-      if (Platform.OS === 'android') {
-        await PermissionsAndroid.requestMultiple([
-          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-          PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
-        ]);
-      }
-    };
     requestPermissions();
   }, []);
 
+  const requestPermissions = async () => {
+    const { status } = await Audio.requestPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Please allow microphone access to record audio.');
+    }
+  };
+
+  // Start recording
   const startRecording = async () => {
     try {
-      const result = await audioRecorderPlayer.startRecorder();
-      setIsRecording(true);
-      console.log('Recording started: ', result);
-    } catch (error) {
-      Alert.alert('Error', 'Could not start recording.');
-    }
-  };
-
-  const stopRecording = async () => {
-    try {
-      const result = await audioRecorderPlayer.stopRecorder();
-      setIsRecording(false);
-      console.log('Recording stopped: ', result);
-
-      setVoiceNotes((prevNotes) => [
-        ...prevNotes,
-        { id: Date.now().toString(), filePath: result, date: new Date() },
-      ]);
-    } catch (error) {
-      Alert.alert('Error', 'Could not stop recording.');
-    }
-  };
-
-  const playVoiceNote = async (filePath: string) => {
-    try {
-      const result = await audioRecorderPlayer.startPlayer(filePath);
-      setIsPlaying(true);
-      console.log('Playing: ', result);
-  
-      audioRecorderPlayer.addPlayBackListener((e) => {
-        if (e.currentPosition === e.duration) {
-          stopPlayback();
+      const { recording } = await Audio.Recording.createAsync(
+        {
+          android: {
+            extension: '.m4a',
+            outputFormat: Audio.RECORDING_OPTION_ANDROID_OUTPUT_FORMAT_MPEG_4,
+            audioEncoder: Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_AAC,
+          },
+          ios: {
+            extension: '.m4a',
+            audioQuality: Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_HIGH,
+            sampleRate: 44100,
+            numberOfChannels: 1,
+            bitRate: 128000,
+          },
+          web: {}, // You can use an empty object or default values here
         }
-      });
+      );
+      setRecording(recording);
+      setIsRecording(true);
     } catch (error) {
-      Alert.alert('Error', 'Could not play the audio.');
+      console.error('Failed to start recording:', error);
     }
   };
-  
 
-  const stopPlayback = async () => {
+  // Stop recording and save the file
+  const stopRecording = async () => {
+    if (recording) {
+      try {
+        await recording.stopAndUnloadAsync();
+        const uri = recording.getURI() || '';
+        setRecordingUri(uri);
+        setIsRecording(false);
+        saveRecording(uri);
+      } catch (error) {
+        console.error('Failed to stop recording:', error);
+      }
+    }
+  };
+
+  // Save the recording to the list
+  const saveRecording = (uri: string) => {
+    if (!recordingTitle.trim()) {
+      Alert.alert('Error', 'Please provide a title for the recording.');
+      return;
+    }
+
+    const newRecording: VoiceNote = {
+      id: Date.now().toString(),
+      title: recordingTitle,
+      filePath: uri,
+      date: new Date().toLocaleString(),
+    };
+
+    setRecordings([...recordings, newRecording]);
+    setRecordingTitle(''); // Clear title input
+  };
+
+  // Delete a recording
+  const deleteRecording = (id: string) => {
+    const updatedRecordings = recordings.filter((item) => item.id !== id);
+    setRecordings(updatedRecordings);
+  };
+
+  // Play a recording
+  const playRecording = async (uri: string) => {
     try {
-      await audioRecorderPlayer.stopPlayer();
-      setIsPlaying(false);
-      console.log('Playback stopped.');
+      const soundObject = new Audio.Sound();
+      await soundObject.loadAsync({ uri });
+      await soundObject.playAsync();
     } catch (error) {
-      Alert.alert('Error', 'Could not stop playback.');
+      console.error('Failed to play recording:', error);
     }
-  };
-
-  const deleteVoiceNote = (id: string) => {
-    setVoiceNotes((prevNotes) => prevNotes.filter((note) => note.id !== id));
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Voice Notes</Text>
+      <Text style={styles.header}>Voice Note App</Text>
+
+      <TextInput
+        style={styles.titleInput}
+        placeholder="Enter recording title"
+        value={recordingTitle}
+        onChangeText={setRecordingTitle}
+      />
+
+      <View style={styles.buttons}>
+        {isRecording ? (
+          <Button title="Stop Recording" onPress={stopRecording} />
+        ) : (
+          <Button title="Start Recording" onPress={startRecording} />
+        )}
+      </View>
+
+      {recordingUri ? (
+        <Text style={styles.uriText}>Recording saved at: {recordingUri}</Text>
+      ) : null}
+
+      <Text style={styles.subHeader}>Recorded Notes</Text>
 
       <FlatList
-        data={voiceNotes}
+        data={recordings}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <View style={styles.noteContainer}>
-            <Text style={styles.noteText}>
-              {item.date.toLocaleDateString()} - {item.date.toLocaleTimeString()}
-            </Text>
-            <View style={styles.noteActions}>
-              <Button
-                title={isPlaying ? 'Stop' : 'Play'}
-                onPress={() =>
-                  isPlaying ? stopPlayback() : playVoiceNote(item.filePath)
-                }
-              />
-              <Button title="Delete" color="red" onPress={() => deleteVoiceNote(item.id)} />
+          <View style={styles.recordingItem}>
+            <Text style={styles.recordingTitle}>{item.title}</Text>
+            <Text style={styles.recordingDate}>{item.date}</Text>
+
+            <View style={styles.recordingButtons}>
+              <Button title="Play" onPress={() => playRecording(item.filePath)} />
+              <Button title="Delete" onPress={() => deleteRecording(item.id)} />
             </View>
           </View>
         )}
       />
-
-      <View style={styles.controls}>
-        <Button
-          title={isRecording ? 'Stop Recording' : 'Start Recording'}
-          onPress={isRecording ? stopRecording : startRecording}
-        />
-      </View>
     </View>
   );
 }
@@ -124,34 +153,50 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f9f9f9',
   },
   header: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 20,
     textAlign: 'center',
+    marginBottom: 20,
   },
-  noteContainer: {
-    padding: 15,
-    marginVertical: 10,
-    backgroundColor: '#ffffff',
-    borderRadius: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 2,
+  subHeader: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginTop: 20,
   },
-  noteText: {
+  titleInput: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    padding: 10,
+    marginBottom: 20,
     fontSize: 16,
+  },
+  buttons: {
+    marginBottom: 20,
+  },
+  uriText: {
+    marginTop: 10,
+    color: '#333',
+  },
+  recordingItem: {
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ccc',
     marginBottom: 10,
   },
-  noteActions: {
+  recordingTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  recordingDate: {
+    fontSize: 14,
+    color: '#555',
+  },
+  recordingButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-  },
-  controls: {
-    marginTop: 20,
+    marginTop: 10,
   },
 });
