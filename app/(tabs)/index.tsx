@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Button, TextInput, FlatList, StyleSheet, Alert } from 'react-native';
+import { View, Text, Button, TextInput, FlatList, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import { Audio } from 'expo-av';
 
 interface VoiceNote {
@@ -45,7 +45,7 @@ export default function App() {
             numberOfChannels: 1,
             bitRate: 128000,
           },
-          web: {}, // You can use an empty object or default values here
+          web: {}, 
         }
       );
       setRecording(recording);
@@ -85,7 +85,7 @@ export default function App() {
     };
 
     setRecordings([...recordings, newRecording]);
-    setRecordingTitle(''); // Clear title input
+    setRecordingTitle(''); 
   };
 
   // Delete a recording
@@ -116,12 +116,22 @@ export default function App() {
         onChangeText={setRecordingTitle}
       />
 
-      <View style={styles.buttons}>
-        {isRecording ? (
-          <Button title="Stop Recording" onPress={stopRecording} />
-        ) : (
-          <Button title="Start Recording" onPress={startRecording} />
-        )}
+     <View style={styles.buttons}>
+          {isRecording ? (
+            <TouchableOpacity
+              style={styles.button}
+              onPress={stopRecording}
+            >
+              <Text style={styles.buttonText}>Stop Recording</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.button}
+              onPress={startRecording}
+            >
+              <Text style={styles.buttonText}>Start Recording</Text>
+            </TouchableOpacity>
+          )}
       </View>
 
       {recordingUri ? (
@@ -138,10 +148,22 @@ export default function App() {
             <Text style={styles.recordingTitle}>{item.title}</Text>
             <Text style={styles.recordingDate}>{item.date}</Text>
 
-            <View style={styles.recordingButtons}>
-              <Button title="Play" onPress={() => playRecording(item.filePath)} />
-              <Button title="Delete" onPress={() => deleteRecording(item.id)} />
-            </View>
+         <View style={styles.recordingButtons}>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => playRecording(item.filePath)}
+           >
+           <Text style={styles.buttonText}>Play</Text>
+         </TouchableOpacity>
+         
+         <TouchableOpacity
+           style={styles.button}
+           onPress={() => deleteRecording(item.id)}
+         >
+           <Text style={styles.buttonText}>Delete</Text>
+         </TouchableOpacity>
+         </View>
+
           </View>
         )}
       />
@@ -153,19 +175,22 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: '#f9f9f9',
+    backgroundColor: '#BDBDBD',
   },
+
   header: {
     fontSize: 24,
     fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 20,
   },
+
   subHeader: {
     fontSize: 20,
     fontWeight: 'bold',
     marginTop: 20,
   },
+
   titleInput: {
     borderWidth: 1,
     borderColor: '#ccc',
@@ -173,19 +198,37 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     fontSize: 16,
   },
+
   buttons: {
     marginBottom: 20,
+    borderRadius: 10,
+    backgroundColor: 'black',
   },
+
+  button: {
+    backgroundColor: 'black',  
+    padding: 10,
+    borderRadius: 5, 
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonText: {
+    color: 'white',  
+    fontSize: 16,
+  },
+
   uriText: {
     marginTop: 10,
     color: '#333',
   },
+
   recordingItem: {
     padding: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#ccc',
     marginBottom: 10,
   },
+
   recordingTitle: {
     fontSize: 18,
     fontWeight: 'bold',
@@ -194,9 +237,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#555',
   },
+  
   recordingButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 10,
+    backgroundColor: '#ffffff',
   },
 });
